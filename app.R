@@ -1,59 +1,77 @@
 library(shiny)
 library(shinythemes)
 library(DT)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(RColorBrewer)
+library(extrafont)
+library(scales)
 
-NIV <- read.csv("clean NIV data 11-9.csv", stringsAsFactors = FALSE)
+# font_import()
+# loadfonts(device = "win")
+# windowsFonts()
 
-names(NIV) <- c("Continent", "Country", "Fiance", "Number_of_Records", "Student", "Temp_Worker",
-                "Total_Visas", "Visitor", "Year")
+df_melt <- read.csv("df_melt1.csv")
+df_melt <- select(df_melt, -X)
+# df_melt$Year <- as.factor(df_melt$Year)
 
-NIV_df <- select(NIV, -Number_of_Records)
-df <- NIV_df[,c(8,2,1,3,4,5,7,6)]
-
-ui <- fluidPage(theme = shinytheme("lumen"),
+ui <- fluidPage(
   basicPage(
-  h2("NIV Data"),
+  h1("U.S. Non Immigrant Visa Issuances"),
+  h2("1997-2017"),
   DT::dataTableOutput("mytable"),
-  titlePanel("NIV Issuances 1997-2017"),
+  titlePanel(img(src="picture.png", align="right", width=100)),
   sidebarLayout(
     sidebarPanel(
-      sliderInput("yearInput", "Year", 1997, 2017, c(2000, 2005), sep = ""),
-      checkboxGroupInput("visatypeInput", "Visa Type",
-                   choices = c("Fiance", "Student", "Visitor", "Temporary Worker", "Total"),
+      # h2("Installation"),
+      sliderInput("yearInput", label = strong("Year"), 1997, 2017, c(2000, 2005), sep = ""),
+      tags$hr(),
+      radioButtons("visatypeInput", label = strong("Visa Type"),
+                   choices =unique(df_melt$VisaType),
                    selected = "Visitor", inline= FALSE),
-      selectInput("countryInput", "Country",
-                  choices = unique(df$Country),
-                  selected = "Mexico", multiple = TRUE)
+      tags$hr(),
+      selectInput("countryInput", label = strong("Country"),
+                  choices = unique(df_melt$Country),
+                  selected = "Mexico", multiple = FALSE),
+      tags$hr(),
+      h5("Built with",
+         img(src = "shiny.png", height = "30px"),
+         "by",
+         img(src = "RStudio.png", height = "30px"),
+         "Studio.")
                 
     ),
     mainPanel(
       tabsetPanel(
         tabPanel("Plot", plotOutput("myplot")), 
-        tabPanel("Summary", verbatimTextOutput("summary")), 
         tabPanel("Table", dataTableOutput("table"), value="table"),
-      plotOutput("myplot"),
-      br(), br(),
-      tableOutput("results")
+        tabPanel("ReadMe", verbatimTextOutput("ReadMe"))
+      # plotOutput("myplot"),
+      # tableOutput("results")
     ))
 )))
 
-dataset <- reactive({df})
   
 server <- function(input, output) {
+  
+  filtered_data <- reactive({filter(df_melt, Country == input$countryInput, Year >= input$yearInput[1], Year <= input$yearInput[2], VisaType %in% input$visatypeInput) })
   output$table = renderDataTable({
-    df})
+    filtered_data()})
   output$myplot <- renderPlot({
-    ggplot(df, aes(x=Year, y=Total_Visas)) + geom_point() #placeholder plot
+    ggplot(filtered_data(), aes(x=Year, y=NumberofVisas)) + geom_bar(stat = "sum", fill="#138D75", width=0.5) + theme_bw() +theme(legend.position="none", text=element_text(size=14))+labs(title="Number of Issued Visas by Type and Country", y="Visa Issuances", x="Year", caption="Source: Department of Homeland Security") + geom_text(aes(label = comma(NumberofVisas))) + geom_label(aes(label = NumberofVisas)) + scale_y_continuous(labels = comma) 
 })
+  output$ReadMe <- renderText({
+    "This Shiny application enables users to explore U.S. non-immigrant visa issuances by country, 
+year and visa category.
+    
+Data source: https://travel.state.gov/content/travel/en/legal/visa-law0/visa-statistics/nonimmigrant-visa-statistics.html"
+  })
+  
 }
-
-
-
-
 
 
 
 shinyApp(ui = ui, server = server)
 
-
-
+# fonts()
